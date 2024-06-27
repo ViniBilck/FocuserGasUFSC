@@ -16,8 +16,8 @@ void loop() {
       digitalWrite(IN3, LOW);
     } else if (command == 'H') {
       // Motor reverse
-      digitalWrite(IN3, HIGH);
       digitalWrite(IN4, LOW);
+      digitalWrite(IN3, HIGH);
     } else if (command == 'S') {
       // Motor stop
       digitalWrite(IN3, LOW);
