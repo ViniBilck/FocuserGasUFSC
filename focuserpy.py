@@ -17,22 +17,22 @@ class FocuserController:
     def motor_forward(self):
         """Run motor forward."""
         self.ser.write(b'L')
-        print("Motor running forward")
+        print("\n Motor running forward")
 
     def motor_reverse(self):
         """Run motor in reverse."""
         self.ser.write(b'H')
-        print("Motor running in reverse")
+        print("\n Motor running in reverse")
 
     def motor_stop(self):
         """Stop the motor."""
         self.ser.write(b'S')
-        print("Motor stopped")
+        print("\n Motor stopped")
 
     def quit(self):
         """Quit the control loop."""
         self.running = False
-        print("Exiting...")
+        print("\n Exiting...")
 
     def print_ascii_art(self):
 
