@@ -6,27 +6,24 @@ class FocuserController:
         try:
             self.ser = serial.Serial(port, baudrate, timeout=1)
             time.sleep(2)
-            print(f"Connected to {port} at {baudrate} baud.")
+            print "Connected to {} at {} baud.".format(port, baudrate)
         except serial.SerialException as e:
-            print(f"Failed to connect to {port}: {e}")
+            print "Failed to connect to {}: {}".format(port, e)
             self.ser = None
         self.initial_distance = 0.0
         self.distance = 0.0
         self.new_time = 0.0
         self.old_time = 0.0
         self.mov_time = 0.0
-        #self.coef = [2.19267852, 1.95741252e-01, -4.28436162e-04]
         self.coef = [2.74463053, 0.45783398]
-        self.speed = 0.193
-        #self.goZero()
 
     def forceZero(self):
         if self.ser and self.ser.is_open:
-            print("Sent command to go to zero.")
+            print "Sent command to go to zero."
             self.moveIn()
             time.sleep(20)
             self.getStop()
-            print("Sent command to stop.")
+            print "Sent command to stop."
             self.new_time = 0.0
             self.old_time = 0.0
             self.mov_time = 0.0
@@ -34,91 +31,63 @@ class FocuserController:
     def goZero(self):
         time.sleep(1)
         if self.ser and self.ser.is_open:
-            print("Sent command to go to zero.")
+            print "Sent command to go to zero."
             self.goTo(2.2)
-            print("Sent command to stop.")
+            print "Sent command to stop."
             self.new_time = 0.0
             self.old_time = 0.0
             self.mov_time = 0.0
         else:
-            print("Serial connection not open. Cannot send command.")
+            print "Serial connection not open. Cannot send command."
 
     def getStop(self):
         if self.ser and self.ser.is_open:
             self.ser.write(b'S')
-            print("Sent command to stop.")
+            print "Sent command to stop."
         else:
-            print("Serial connection not open. Cannot send command.")
+            print "Serial connection not open. Cannot send command."
 
     def getTime(self, position):
-        self.new_time = (position - self.coef[0]) / self.coef[1]
-        print(f"D = {position} mm")
+        self.new_time = (-self.coef[0] + position) / self.coef[1]
+        print "D = {} mm".format(position)
 
     def getPosition(self):
-        f = lambda x: self.coef[0] - self.position + self.coef[1]*x + (self.coef[2]*x**2)/2
-        self.position = f(self.old_time)
-
         self.position = self.old_time    
+    
     def goTo(self, position):
         time.sleep(1)
         if (position >=  2.2) and (position <= 15):
             self.getTime(position)
             if self.new_time < self.old_time:
                 self.mov_time = self.old_time - self.new_time
-                print(f'time: {self.mov_time}')
+                print 'time: {}'.format(self.mov_time)
                 self.old_time = self.new_time
                 self.moveIn()
                 time.sleep(self.mov_time)
                 self.getStop()
             if self.old_time < self.new_time:
                 self.mov_time = self.new_time - self.old_time
-                print(f'time: {self.mov_time}')
+                print 'time: {}'.format(self.mov_time)
                 self.old_time = self.new_time
                 self.moveOut()
                 time.sleep(self.mov_time)
                 self.getStop()
         else:
-            print('Invalid position')
+            print 'Invalid position'
 
 
     def moveIn(self):
         if self.ser and self.ser.is_open:
             self.ser.write(b'L')
-            print("Sent command to move in.")
+            print "Sent command to move in."
         else:
-            print("Serial connection not open. Cannot send command.")
+            print "Serial connection not open. Cannot send command."
 
     def moveOut(self):
         if self.ser and self.ser.is_open:
             self.ser.write(b'H')
-            print("Sent command to move out.")
+            print "Sent command to move out."
         else:
-            print("Serial connection not open. Cannot send command.")
+            print "Serial connection not open. Cannot send command."
 
 
-    def quit(self):
-        """Quit the control loop."""
-        if self.ser and self.ser.is_open:
-            self.ser.close()
-        self.running = False
-        print("\nExiting...")
-
-    def run(self):
-        """Main loop to listen for keyboard commands."""
-        if self.ser and self.ser.is_open:
-            self.ser.close()
-
-"""
-if __name__ == "__main__":
-    motor_controller = FocuserController('/dev/ttyUSB0')  # Update with your serial port
-    if motor_controller.ser and motor_controller.ser.is_open:
-        motor_controller.goZero()
-        #motor_controller.goTo(7)
-        #time.sleep(10)
-        #motor_controller.goTo(4)
-
-
-        
-    else:
-        print("Failed to initialize the motor controller.")
-"""
