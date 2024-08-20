@@ -26,16 +26,30 @@ from chimera.interfaces.focuser import (FocuserFeature,
 
 from chimera.instruments.focuser import FocuserBase
 
-import serial 
+import serial
 
 import time
 
-class GasFocuser (FocuserBase):
+
+
+
+class FakeFocuser(FocuserBase):
 
     def __init__(self):
         FocuserBase.__init__(self)
-
-        self._position = 0
+        self._port = self['device']
+        self._baudrate = 9600
+        self._focusConfig = {"dt": 26.768, #Seconds
+                             "pulse_dt": 0.2, #Seconds
+                             "function_coef": [2.74463053, 0.45783398],
+                             }
+        try:
+            self.ser = serial.Serial(self['device'], self._baudrate, timeout=1)
+            time.sleep(2)
+            print "Connected to {} at {} baud.".format(self['device'], self._baudrate)
+        except serial.SerialException as e:
+            print "Failed to connect to {}: {}".format(self['device'], e)
+            self.ser = None
 
         self._supports = {FocuserFeature.TEMPERATURE_COMPENSATION: False,
                           FocuserFeature.POSITION_FEEDBACK: True,
@@ -47,34 +61,32 @@ class GasFocuser (FocuserBase):
                           FocuserFeature.CONTROLLABLE_V: False,
                           FocuserFeature.CONTROLLABLE_W: False,
                           }
-        try:
-            self.ser = serial.Serial(port, baudrate, timeout=1)
-            time.sleep(2)
-            print "Connected to {} at {} baud.".format(port, baudrate)
-        except serial.SerialException as e:
-            print "Failed to connect to {}: {}".format(port, e)
-            self.ser = None
-        
-        self.initial_distance = 0.0
-        self.distance = 0.0
-        self.new_time = 0.0
-        self.old_time = 0.0
-        self.mov_time = 0.0
-        self.coef = [2.74463053, 0.45783398]
-
-
+        self._range = (0, int(self._focusConfig['dt'] / float(self._focusConfig["pulse_dt"])))
+        self._position = 0
+        self._mov = 0
 
     def __start__(self):
-        self._position = int(self.getRange()[1] / 2.0)
-        self["model"] = "Gas Focus v.1"
+        self["model"] = "Fake Focus v.1"
+
+
+    def getTime(self, position):
+        new_time = (-self._focusConfig['function_coef'][0] + position) / self._focusConfig['function_coef'][1]
+        return new_time
 
     @lock
     def moveIn(self, n, axis=FocuserAxis.Z):
         self._checkAxis(axis)
-        target = self.getPosition() - n
-
+        time_spend = self._focusConfig['pulse_dt'] * n
+        target = self.getPosition() + n
         if self._inRange(target):
-            self._setPosition(target)
+            if self.ser and self.ser.is_open:
+                self.ser.write(b'L')
+                time.sleep(time_spend)
+                self.ser.write(b'S')
+                self._setPosition(target)
+                print "Sent command to move in."
+            else:
+                print "Serial connection not open. Cannot send command."
         else:
             raise InvalidFocusPositionException("%d is outside focuser "
                                                 "boundaries." % target)
@@ -82,10 +94,18 @@ class GasFocuser (FocuserBase):
     @lock
     def moveOut(self, n, axis=FocuserAxis.Z):
         self._checkAxis(axis)
+        time_spend = self._focusConfig['pulse_dt'] * n
         target = self.getPosition() + n
-
         if self._inRange(target):
-            self._setPosition(target)
+            if self.ser and self.ser.is_open:
+                self.ser.write(b'H')
+                time.sleep(time_spend)
+                self.ser.write(b'S')
+                self._setPosition(target)
+                print "Sent command to move in."
+            else:
+                print "Serial connection not open. Cannot send command."
+
         else:
             raise InvalidFocusPositionException("%d is outside focuser "
                                                 "boundaries." % target)
@@ -94,58 +114,27 @@ class GasFocuser (FocuserBase):
     def moveTo(self, position, axis=FocuserAxis.Z):
         self._checkAxis(axis)
         if self._inRange(position):
-            self._setPosition(position)
+            if position < self.getPosition():
+                self._mov = self.getPosition() - position
+                self.moveIn(self._mov)
+                self._setPosition(position)
+
+            if self.getPosition() < position:
+                self._mov = position - self.getPosition()
+                self.moveOut(self._mov)
+                self._setPosition(position)
+
         else:
             raise InvalidFocusPositionException("%d is outside focuser "
                                                 "boundaries." % int(position))
-
     @lock
     def getPosition(self, axis=FocuserAxis.Z):
         self._checkAxis(axis)
         return self._position
 
-    def getTime(self, position):
-        self.new_time = (-self.coef[0] + position) / self.coef[1]
-        print "D = {} mm".format(position)
-    
-    def getN(self, mm):
-        n_mm = 0.5
-
-        self._position
-        
-
-    def goTo(self, position):
-        time.sleep(1)
-        if (position >=  2.2) and (position <= 15):
-            self.getTime(position)
-            if self.new_time < self.old_time:
-                self.mov_time = self.old_time - self.new_time
-                print 'time: {}'.format(self.mov_time)
-                self.old_time = self.new_time
-                self.moveIn()
-                time.sleep(self.mov_time)
-                self.getStop()
-            if self.old_time < self.new_time:
-                self.mov_time = self.new_time - self.old_time
-                print 'time: {}'.format(self.mov_time)
-                self.old_time = self.new_time
-                self.moveOut()
-                time.sleep(self.mov_time)
-                self.getStop()
-        else:
-            print 'Invalid position'
-
-
-
-
-
-
-
-
-
     def getRange(self, axis=FocuserAxis.Z):
         self._checkAxis(axis)
-        return (0, 7000)
+        return self._range
 
     def _setPosition(self, n):
         self.log.info("Changing focuser to %s" % n)
