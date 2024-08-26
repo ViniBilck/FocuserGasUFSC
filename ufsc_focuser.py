@@ -77,7 +77,7 @@ class FakeFocuser(FocuserBase):
     def moveIn(self, n, axis=FocuserAxis.Z):
         self._checkAxis(axis)
         time_spend = self._focusConfig['pulse_dt'] * n
-        target = self.getPosition() + n
+        target = self.getPosition() - n
         if self._inRange(target):
             if self.ser and self.ser.is_open:
                 self.ser.write(b'L')
